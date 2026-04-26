@@ -1,1 +1,36 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My App</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 50px; }
+        button { padding: 10px 20px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Halo, Ini Website GitHub Pages Saya</h1>
+    <button onclick="panggilBackend()">Cek Data dari Backend</button>
+    <p id="respon"></p>
+
+    <script>
+        async function panggilBackend() {
+            const display = document.getElementById('respon');
+            display.innerText = "Menghubungi Apps Script...";
+            
+            // URL ini nanti diganti dengan URL dari Google Apps Script
+            const url = "GANTI_DENGAN_URL_DEPLOY_GAS_KAMU";
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                display.innerText = "Data diterima: " + data.pesan;
+            } catch (err) {
+                display.innerText = "Gagal: Pastikan URL Apps Script sudah benar & sudah di-deploy.";
+            }
+        }
+    </script>
+</body>
+</html>
 
