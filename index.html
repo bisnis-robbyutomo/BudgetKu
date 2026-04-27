@@ -276,8 +276,24 @@
     #pdf-iframe { flex:1; border:none; width:100%; background:#fff; }
 
     /* PERIOD CARD */
-    #period-edit-mode { display:none; }
     .divider { height:1px; background:var(--border); margin:10px 0; }
+
+    /* Period Picker Modal */
+    #modal-period-picker { position:fixed; inset:0; z-index:6000; background:rgba(0,0,0,.5); display:none; align-items:flex-end; justify-content:center; }
+    #modal-period-picker.show { display:flex; }
+    .period-picker-sheet { background:#fff; border-radius:24px 24px 0 0; width:100%; max-width:520px; padding:20px 18px 32px; }
+    .period-picker-title { font-size:.98rem; font-weight:800; margin-bottom:4px; display:flex; align-items:center; gap:7px; }
+    .period-picker-title i { color:var(--primary); }
+    .period-picker-subtitle { font-size:.73rem; color:var(--muted); margin-bottom:14px; }
+    .period-item { display:flex; align-items:center; padding:11px 13px; border:1.5px solid var(--border); border-radius:13px; margin-bottom:8px; cursor:pointer; gap:12px; transition:all .15s; }
+    .period-item:hover, .period-item:active { border-color:var(--primary); background:var(--primary-light); }
+    .period-item-icon { width:38px; height:38px; border-radius:10px; background:var(--primary-light); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .period-item-icon i { color:var(--primary); font-size:1.1rem; }
+    .period-item-info { flex:1; }
+    .period-item-date { font-size:.84rem; font-weight:700; color:var(--text); }
+    .period-item-count { font-size:.68rem; color:var(--muted); margin-top:2px; }
+    .period-item-arrow { color:var(--muted); font-size:.9rem; }
+    .period-empty { text-align:center; padding:20px 0; color:var(--muted); font-size:.8rem; }
   </style>
 </head>
 <body>
@@ -488,8 +504,8 @@
         </div>
         <div class="card-body" id="period-edit-mode">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
-            <div><label class="form-label-sm">Tgl Awal</label><input type="date" id="budget-tgl-awal" class="form-control" /></div>
-            <div><label class="form-label-sm">Tgl Akhir</label><input type="date" id="budget-tgl-akhir" class="form-control" /></div>
+            <div><label class="form-label-sm">Tgl Awal</label><input type="date" id="period-tgl-awal" class="form-control" /></div>
+            <div><label class="form-label-sm">Tgl Akhir</label><input type="date" id="period-tgl-akhir" class="form-control" /></div>
           </div>
           <div style="display:flex;gap:7px;">
             <button class="btn-primary-full" onclick="savePeriod()" style="flex:1;"><i class="bi bi-check2-circle"></i> Simpan Periode</button>
@@ -535,11 +551,25 @@
 
 </div><!-- end .app -->
 
+<!-- PERIOD PICKER MODAL -->
+<div id="modal-period-picker" onclick="if(event.target===this)closePeriodPicker()">
+  <div class="period-picker-sheet">
+    <div class="period-picker-title"><i class="bi bi-calendar2-range-fill"></i> Salin Anggaran</div>
+    <div class="period-picker-subtitle">Pilih periode yang ingin disalin ke periode aktif saat ini</div>
+    <div id="period-picker-list">
+      <div class="period-empty"><i class="bi bi-hourglass"></i> Memuat...</div>
+    </div>
+    <button class="btn-sm-action" onclick="closePeriodPicker()" style="width:100%;justify-content:center;margin-top:4px;background:#64748b;">
+      <i class="bi bi-x-lg"></i> Batal
+    </button>
+  </div>
+</div>
+
 <script>
 // ================================================================
 // KONFIGURASI - WAJIB DIISI SETELAH DEPLOY GAS
 // ================================================================
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbwOH3g1A6tsjKi3lA4Mmu4b_es-NuBreTVK6pmFC4WeOxEZ89W93CO6Tm6W6R4h0kXX/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbzbd9qHX9RdFhPDj8xJGO8y7-hJs1Wey1hiKV5qEe4-0f9BGMMBM8JLNQH7Aiy6jy1M/exec';
 // Contoh: 'https://script.google.com/macros/s/AKfycb.../exec'
 
 // ================================================================
@@ -559,18 +589,20 @@ var INCOME_COLORS = ['#22c55e','#16a34a','#4ade80','#86efac','#14b8a6','#0d9488'
 // API HELPER - fetch ke GAS dengan doPost
 // ================================================================
 async function api(action, params) {
+  // Gunakan GET request agar CORS bekerja dengan GAS Web App
+  // GAS doGet() secara native support CORS, doPost() tidak
   params = params || {};
-  var body = Object.assign({action: action, token: authToken}, params);
   try {
-    var res = await fetch(GAS_URL, {
-      method: 'POST',
-      headers: {'Content-Type': 'text/plain'},
-      body: JSON.stringify(body)
-    });
+    var dataPayload = encodeURIComponent(JSON.stringify(params));
+    var url = GAS_URL
+      + '?action=' + encodeURIComponent(action)
+      + '&token=' + encodeURIComponent(authToken)
+      + '&data=' + dataPayload;
+    var res = await fetch(url, { method: 'GET' });
     var data = await res.json();
     return data;
   } catch(e) {
-    return {success: false, error: e.message || 'Network error'};
+    return {success: false, error: e.message || 'Network error - cek GAS_URL'};
   }
 }
 
@@ -607,7 +639,9 @@ async function doLogin(){
     loadGlobalPeriod();
     loadData();
   } else {
-    document.getElementById('login-err').style.display='block';
+    var errEl=document.getElementById('login-err');
+    errEl.style.display='block';
+    errEl.textContent = r && r.error ? r.error : 'Login gagal. Cek koneksi & GAS_URL.';
     document.getElementById('login-pass').value='';
   }
 }
@@ -672,7 +706,7 @@ function renderStat(){
   document.getElementById('total-sisa-anggaran').textContent=fRp(appData.totalSisaAnggaran||0);
   var def=appData.totalDefisit||0;
   var cd=document.getElementById('card-defisit');
-  if(def>0){document.getElementById('total-defisit').textContent=fRp(def);if(cd)cd.style.display='';}else{if(cd)cd.style.display='none';}
+  if(def>0){document.getElementById('total-defisit').textContent=fRp(def);if(cd)cd.style.display='block';}else{if(cd)cd.style.display='none';}
   var bl=appData.budgetList||[];
   document.getElementById('stat-sub').textContent=bl.length?'dari total limit '+fRp(appData.totalAnggaran||0):'Belum ada limit budget';
 }
@@ -845,15 +879,46 @@ async function doTransfer(){
 // ACTIONS - Budget
 // ================================================================
 function loadGlobalPeriod(){
-  try{var s=sessionStorage.getItem('budgetPeriod');if(s){var p=JSON.parse(s);globalTglAwal=p.awal||'';globalTglAkhir=p.akhir||'';}}catch(e){}
-  if(!globalTglAwal||!globalTglAkhir){var d=new Date(),fmt=function(dt){return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');};globalTglAwal=fmt(new Date(d.getFullYear(),d.getMonth(),28));globalTglAkhir=fmt(new Date(d.getFullYear(),d.getMonth()+1,27));}
+  try{
+    var s=sessionStorage.getItem('budgetPeriod');
+    if(s){var p=JSON.parse(s);globalTglAwal=p.awal||'';globalTglAkhir=p.akhir||'';}
+  }catch(e){}
+  if(!globalTglAwal||!globalTglAkhir){
+    var d=new Date();
+    var fmt=function(dt){return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');};
+    globalTglAwal=fmt(new Date(d.getFullYear(),d.getMonth(),28));
+    globalTglAkhir=fmt(new Date(d.getFullYear(),d.getMonth()+1,27));
+  }
   updatePeriodUI();
 }
 function saveGlobalPeriod(awal,akhir){globalTglAwal=awal;globalTglAkhir=akhir;try{sessionStorage.setItem('budgetPeriod',JSON.stringify({awal:awal,akhir:akhir}));}catch(e){}updatePeriodUI();}
-function updatePeriodUI(){var el=document.getElementById('period-label');if(el)el.textContent=(globalTglAwal||'-')+' s/d '+(globalTglAkhir||'-');var ia=document.getElementById('budget-tgl-awal'),ik=document.getElementById('budget-tgl-akhir');if(ia)ia.value=globalTglAwal;if(ik)ik.value=globalTglAkhir;var hdr=document.getElementById('header-month');if(hdr&&appData&&appData.bulan)hdr.innerHTML=(appData.bulan||'')+' &nbsp;&middot;&nbsp; '+(globalTglAwal||'')+' - '+(globalTglAkhir||'');}
-function showPeriodEdit(){document.getElementById('period-display-mode').style.display='none';document.getElementById('period-edit-mode').style.display='';var ia=document.getElementById('budget-tgl-awal'),ik=document.getElementById('budget-tgl-akhir');if(ia)ia.value=globalTglAwal;if(ik)ik.value=globalTglAkhir;}
-function hidePeriodEdit(){document.getElementById('period-display-mode').style.display='';document.getElementById('period-edit-mode').style.display='none';}
-function savePeriod(){var awal=document.getElementById('budget-tgl-awal').value,akhir=document.getElementById('budget-tgl-akhir').value;if(!awal||!akhir){toast('Pilih tgl awal & akhir!','error');return;}if(awal>=akhir){toast('Tgl akhir harus setelah awal!','error');return;}saveGlobalPeriod(awal,akhir);hidePeriodEdit();toast('Periode disimpan!','success');loadData();}
+function updatePeriodUI(){
+  // Update label display
+  var el=document.getElementById('period-label');
+  if(el) el.textContent=(globalTglAwal||'-')+' s/d '+(globalTglAkhir||'-');
+  // Update period editor inputs (NOT budget form inputs)
+  var ia=document.getElementById('period-tgl-awal');
+  var ik=document.getElementById('period-tgl-akhir');
+  if(ia) ia.value=globalTglAwal;
+  if(ik) ik.value=globalTglAkhir;
+  // Update header
+  var hdr=document.getElementById('header-month');
+  if(hdr&&appData&&appData.bulan)
+    hdr.innerHTML=(appData.bulan||'')+' &nbsp;&middot;&nbsp; '+(globalTglAwal||'')+' - '+(globalTglAkhir||'');
+}
+function showPeriodEdit(){
+  document.getElementById('period-display-mode').style.display='none';
+  document.getElementById('period-edit-mode').style.display='block';
+  var ia=document.getElementById('period-tgl-awal');
+  var ik=document.getElementById('period-tgl-akhir');
+  if(ia) ia.value=globalTglAwal;
+  if(ik) ik.value=globalTglAkhir;
+}
+function hidePeriodEdit(){
+  document.getElementById('period-display-mode').style.display='';
+  document.getElementById('period-edit-mode').style.display='none';
+}
+function savePeriod(){var awal=document.getElementById('period-tgl-awal').value,akhir=document.getElementById('period-tgl-akhir').value;if(!awal||!akhir){toast('Pilih tgl awal & akhir!','error');return;}if(awal>=akhir){toast('Tgl akhir harus setelah awal!','error');return;}saveGlobalPeriod(awal,akhir);hidePeriodEdit();toast('Periode disimpan!','success');loadData();}
 
 async function setBudget(){
   var kat=document.getElementById('budget-kat-sel').value,lim=parseVal(document.getElementById('budget-limit').value);
@@ -872,18 +937,92 @@ async function hapusBudgetConfirm(kat){
   var r=await api('hapusBudget',{kategori:kat});
   if(r&&r.success){toast('Budget dihapus','success');loadData();}else{toast(r?r.error:'Gagal','error');}
 }
+// === PERIOD PICKER ===
 async function copyBudgetBulanLalu(){
-  if(!confirm('Salin semua budget yang ada ke periode sekarang?'))return;
-  var r=await api('getBudgetBulanLalu');
-  if(!r||!r.success){toast('Gagal: '+(r?r.error:''),'error');return;}
-  var budgets=r.budgets||[];if(!budgets.length){toast('Belum ada budget untuk disalin.','error');return;}
-  var saved=0;
-  for(var i=0;i<budgets.length;i++){
-    var b=budgets[i];
-    await api('updateBudget',{kategori:b.kategori,limit:b.limit,tglAwal:globalTglAwal,tglAkhir:globalTglAkhir});
-    saved++;
+  // Tampilkan modal period picker
+  var modal = document.getElementById('modal-period-picker');
+  var listEl = document.getElementById('period-picker-list');
+  if(!modal || !listEl) return;
+
+  // Show modal with loading state
+  listEl.innerHTML = '<div class="period-empty"><i class="bi bi-hourglass-split"></i> Memuat daftar periode...</div>';
+  modal.classList.add('show');
+
+  // Fetch available periods from backend
+  var r = await api('getAvailablePeriods');
+  if(!r || !r.success){
+    listEl.innerHTML = '<div class="period-empty" style="color:var(--danger);">Gagal memuat: '+(r?r.error:'Network error')+'</div>';
+    return;
   }
-  toast(saved+' budget disalin!','success');loadData();
+
+  var periodes = r.periodes || [];
+  if(!periodes.length){
+    listEl.innerHTML = '<div class="period-empty"><i class="bi bi-inbox"></i><br>Belum ada periode budget tersimpan</div>';
+    return;
+  }
+
+  // Render period list (max 5)
+  listEl.innerHTML = periodes.map(function(p, idx){
+    var tglAwal  = p.tglAwal  || '-';
+    var tglAkhir = p.tglAkhir || '-';
+    var count    = (p.budgets || []).length;
+    var label    = tglAwal + ' s/d ' + tglAkhir;
+    if(tglAwal === '-' && tglAkhir === '-') label = 'Tanpa periode';
+    return '<div class="period-item" data-pidx="'+idx+'" onclick="selectPeriodToCopy(this.dataset.pidx)">'
+      + '<div class="period-item-icon"><i class="bi bi-calendar-range-fill"></i></div>'
+      + '<div class="period-item-info">'
+        + '<div class="period-item-date">'+label+'</div>'
+        + '<div class="period-item-count">'+count+' kategori anggaran</div>'
+      + '</div>'
+      + '<i class="bi bi-chevron-right period-item-arrow"></i>'
+      + '</div>';
+  }).join('');
+
+  // Store periods data for later use
+  window._availablePeriodes = periodes;
+}
+
+function closePeriodPicker(){
+  var modal = document.getElementById('modal-period-picker');
+  if(modal) modal.classList.remove('show');
+  window._availablePeriodes = null;
+}
+
+async function selectPeriodToCopy(pidx){
+  var periodes = window._availablePeriodes || [];
+  var periode  = periodes[parseInt(pidx)];
+  if(!periode) return;
+
+  var budgets = periode.budgets || [];
+  if(!budgets.length){ toast('Tidak ada budget di periode ini','error'); return; }
+
+  var label = (periode.tglAwal||'-') + ' s/d ' + (periode.tglAkhir||'-');
+  if(!confirm('Salin '+budgets.length+' anggaran dari periode\n'+label+'\nke periode aktif: '+globalTglAwal+' s/d '+globalTglAkhir+'?')) return;
+
+  closePeriodPicker();
+
+  // Copy one by one
+  var saved = 0;
+  var listEl = document.getElementById('period-picker-list');
+  toast('Menyalin '+budgets.length+' anggaran...','info');
+
+  for(var i = 0; i < budgets.length; i++){
+    var b = budgets[i];
+    var r = await api('updateBudget',{
+      kategori: b.kategori,
+      limit:    b.limit,
+      tglAwal:  globalTglAwal,
+      tglAkhir: globalTglAkhir
+    });
+    if(r && r.success) saved++;
+  }
+
+  if(saved > 0){
+    toast(saved+' anggaran berhasil disalin!','success');
+    loadData();
+  } else {
+    toast('Tidak ada anggaran yang berhasil disalin','error');
+  }
 }
 
 // ================================================================
