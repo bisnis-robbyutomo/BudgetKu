@@ -159,6 +159,7 @@
     .stat-sub { font-size:.67rem; opacity:.75; margin-top:4px; }
     .mini-stats { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-bottom:10px; }
     .mini-card { background:#fff; border-radius:14px; padding:12px 13px; border:1px solid var(--border); box-shadow:0 1px 4px rgba(0,0,0,.04); }
+    #card-defisit { background:#fff5f5; border-color:#fecaca; }
     .mc-icon { font-size:1.2rem; margin-bottom:3px; }
     .mc-label { font-size:.63rem; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.4px; }
     .mc-val { font-size:.88rem; font-weight:800; margin-top:2px; }
@@ -220,6 +221,7 @@
     .bar-d { background:linear-gradient(90deg,#ef4444,#dc2626); }
     .budget-actions { display:flex; gap:5px; margin-top:6px; }
     .total-anggaran-badge { display:inline-flex; align-items:center; gap:5px; background:#e0e7ff; color:var(--primary); border-radius:10px; padding:5px 11px; font-size:.74rem; font-weight:700; margin-bottom:10px; }
+    .dana-menganggur-badge { display:inline-flex; align-items:center; gap:5px; background:#f0fdf4; color:#059669; border-radius:10px; padding:5px 11px; font-size:.74rem; font-weight:700; margin-bottom:10px; margin-left:6px; border:1px solid #bbf7d0; }
 
     /* AKUN */
     .akun-item { display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid #f1f5f9; }
@@ -277,6 +279,16 @@
 
     /* PERIOD CARD */
     .divider { height:1px; background:var(--border); margin:10px 0; }
+
+    /* PDF Export Period Selector */
+    #modal-pdf-period { position:fixed; inset:0; z-index:7000; background:rgba(0,0,0,.5); display:none; align-items:flex-end; justify-content:center; }
+    #modal-pdf-period.show { display:flex; }
+    .pdf-period-sheet { background:#fff; border-radius:24px 24px 0 0; width:100%; max-width:520px; padding:20px 18px 32px; }
+    .pdf-period-title { font-size:.98rem; font-weight:800; margin-bottom:4px; display:flex; align-items:center; gap:7px; color:var(--text); }
+    .pdf-period-title i { color:#0f766e; }
+    .pdf-period-subtitle { font-size:.73rem; color:var(--muted); margin-bottom:14px; }
+    .pdf-period-current { border:2px solid var(--primary); background:var(--primary-light); }
+    .pdf-period-current .period-item-date { color:var(--primary); }
 
     /* Period Picker Modal */
     #modal-period-picker { position:fixed; inset:0; z-index:6000; background:rgba(0,0,0,.5); display:none; align-items:flex-end; justify-content:center; }
@@ -515,7 +527,10 @@
         </div>
       </div>
       <div id="total-anggaran-wrap" style="display:none;margin-bottom:10px;">
-        <div class="total-anggaran-badge"><i class="bi bi-wallet-fill"></i> Total Anggaran: <span id="total-anggaran-val">Rp 0</span></div>
+        <div style="display:flex;flex-wrap:wrap;gap:0;align-items:center;">
+          <div class="total-anggaran-badge"><i class="bi bi-wallet-fill"></i> Total Anggaran: <span id="total-anggaran-val">Rp 0</span></div>
+          <div class="dana-menganggur-badge" id="dana-menganggur-wrap"><i class="bi bi-piggy-bank-fill"></i> Dana Menganggur: <span id="dana-menganggur-val">Rp 0</span></div>
+        </div>
       </div>
       <!-- Form Budget -->
       <div class="card">
@@ -553,6 +568,19 @@
 </div><!-- end .app -->
 
 <!-- PERIOD PICKER MODAL -->
+<!-- PDF EXPORT PERIOD MODAL -->
+<div id="modal-pdf-period" onclick="if(event.target===this)closePdfPeriodModal()">
+  <div class="pdf-period-sheet">
+    <div class="pdf-period-title"><i class="bi bi-file-earmark-pdf-fill"></i> <span id="pdf-period-modal-title">Export PDF</span></div>
+    <div class="pdf-period-subtitle">Pilih periode yang ingin diekspor</div>
+    <div id="pdf-period-list"></div>
+    <div style="margin-top:8px;display:flex;gap:8px;">
+      <button class="btn-sm-action" onclick="doPdfExportCurrentPeriod()" style="flex:1;justify-content:center;background:var(--primary);"><i class="bi bi-check2-circle"></i> Periode Aktif</button>
+      <button class="btn-sm-action" onclick="closePdfPeriodModal()" style="background:#64748b;"><i class="bi bi-x-lg"></i> Batal</button>
+    </div>
+  </div>
+</div>
+
 <div id="modal-period-picker" onclick="if(event.target===this)closePeriodPicker()">
   <div class="period-picker-sheet">
     <div class="period-picker-title"><i class="bi bi-calendar2-range-fill"></i> Salin Anggaran</div>
@@ -707,6 +735,9 @@ function renderStat(){
   document.getElementById('total-sisa-anggaran').textContent=fRp(appData.totalSisaAnggaran||0);
   var def=appData.totalDefisit||0;
   document.getElementById('total-defisit').textContent=fRp(def);
+  // Card defisit selalu tampil
+  var cardDef=document.getElementById('card-defisit');
+  if(cardDef) cardDef.style.display='';
   var bl=appData.budgetList||[];
   document.getElementById('stat-sub').textContent=bl.length?'dari total limit '+fRp(appData.totalAnggaran||0):'Belum ada limit budget';
 }
@@ -771,7 +802,19 @@ function renderSetup(){
 function renderBudget(){
   var list=appData.budgetList||[],totAng=appData.totalAnggaran||0;
   var wr=document.getElementById('total-anggaran-wrap');
-  if(totAng>0){wr.style.display='block';document.getElementById('total-anggaran-val').textContent=fRp(totAng);}else{wr.style.display='none';}
+  // Hitung total saldo semua akun
+  var totalSaldoAkun = (appData.akunWithSaldo||[]).reduce(function(s,a){return s+(a.saldo||0);},0);
+  // Dana Menganggur = total saldo akun - total anggaran, min 0
+  var danaMenganggur = Math.max(0, totalSaldoAkun - totAng);
+  if(totAng>0){
+    wr.style.display='block';
+    document.getElementById('total-anggaran-val').textContent=fRp(totAng);
+    document.getElementById('dana-menganggur-val').textContent=fRp(danaMenganggur);
+    var dmWrap=document.getElementById('dana-menganggur-wrap');
+    if(dmWrap) dmWrap.style.display='';
+  } else {
+    wr.style.display='none';
+  }
   var el=document.getElementById('budget-list');
   if(!list.length){el.innerHTML='<div class="empty-state"><i class="bi bi-clipboard-data"></i><p>Belum ada budget</p></div>';return;}
   var html='';
@@ -1087,14 +1130,41 @@ function getPDFDoc(title,subtitle){
   doc.text('Periode: '+(globalTglAwal||'-')+' s/d '+(globalTglAkhir||'-'),14,38);
   return{doc:doc,startY:44};
 }
+// Variabel untuk menyimpan mode export PDF saat ini
+var _pdfExportMode = ''; // 'riwayat' atau 'budget'
+var _pdfTglAwal = '', _pdfTglAkhir = '';
+
 function exportRiwayatPDF(){
   if(!appData||!appData.allTransaksi){toast('Data belum dimuat!','error');return;}
   if(!window.jspdf){toast('Library PDF belum siap, refresh halaman','error');return;}
-  var all=appData.allTransaksi||[],filtered=curFilter==='all'?all:all.filter(function(t){return t.tipe===curFilter;});
-  if(!filtered.length){toast('Tidak ada transaksi untuk diekspor','error');return;}
+  _pdfExportMode='riwayat';
+  showPdfPeriodModal('Export PDF Riwayat');
+}
+
+function doExportRiwayatPDF(tglAwal, tglAkhir){
+  if(!appData||!appData.allTransaksi){toast('Data belum dimuat!','error');return;}
+  // Filter transaksi berdasarkan periode yang dipilih
+  var allTrx=appData.allTransaksi||[];
+  var filtered;
+  if(tglAwal && tglAkhir){
+    var dA=new Date(tglAwal+'T00:00:00'), dK=new Date(tglAkhir+'T23:59:59');
+    filtered=allTrx.filter(function(t){
+      if(!t.tanggal) return false;
+      var td=new Date(t.tanggal+'T00:00:00');
+      return td>=dA && td<=dK;
+    });
+    if(curFilter!=='all') filtered=filtered.filter(function(t){return t.tipe===curFilter;});
+  } else {
+    filtered=curFilter==='all'?allTrx:allTrx.filter(function(t){return t.tipe===curFilter;});
+  }
+  if(!filtered.length){toast('Tidak ada transaksi di periode ini','error');return;}
   toast('Membuat PDF...','info');
   var filterLabel={all:'Semua',pengeluaran:'Pengeluaran',pemasukan:'Pemasukan',transfer:'Transfer'}[curFilter]||'Semua';
-  var obj=getPDFDoc('RIWAYAT TRANSAKSI','Filter: '+filterLabel);var doc=obj.doc,startY=obj.startY;
+  var periodeLabel=(tglAwal||globalTglAwal||'')+' s/d '+(tglAkhir||globalTglAkhir||'');
+  var obj=getPDFDoc('RIWAYAT TRANSAKSI','Filter: '+filterLabel+' | Periode: '+periodeLabel);var doc=obj.doc,startY=obj.startY;
+  // Override periode label di header
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(100,116,139);
+  doc.text('Periode: '+(tglAwal||globalTglAwal||'-')+' s/d '+(tglAkhir||globalTglAkhir||'-'),14,38);
   var totalExp=filtered.filter(function(t){return t.tipe==='pengeluaran';}).reduce(function(s,t){return s+t.jumlah;},0);
   var totalInc=filtered.filter(function(t){return t.tipe==='pemasukan';}).reduce(function(s,t){return s+t.jumlah;},0);
   doc.setFillColor(238,242,255);doc.roundedRect(14,startY,182,18,3,3,'F');
@@ -1106,16 +1176,46 @@ function exportRiwayatPDF(){
   var tableData=filtered.map(function(t,i){return[i+1,t.tanggal||'-',(t.keterangan||'-').substring(0,30),t.kategori||'-',t.akun||'-',t.tipe==='pengeluaran'?'Keluar':t.tipe==='pemasukan'?'Masuk':'Transfer',fRpPDF(t.jumlah)];});
   doc.autoTable({startY:startY,head:[['No','Tanggal','Keterangan','Kategori','Akun','Tipe','Jumlah']],body:tableData,theme:'striped',headStyles:{fillColor:[79,70,229],textColor:255,fontStyle:'bold',fontSize:8,halign:'center'},bodyStyles:{fontSize:7.5,cellPadding:2},columnStyles:{0:{halign:'center',cellWidth:8},1:{cellWidth:22},2:{cellWidth:45},3:{cellWidth:28},4:{cellWidth:25},5:{halign:'center',cellWidth:18},6:{halign:'right',cellWidth:30}},didParseCell:function(data){if(data.section==='body'&&data.column.index===5){var v=data.cell.raw;if(v==='Keluar')data.cell.styles.textColor=[239,68,68];else if(v==='Masuk')data.cell.styles.textColor=[34,197,94];else data.cell.styles.textColor=[2,132,199];}},foot:[['','','','','','TOTAL KELUAR',fRpPDF(totalExp)]],footStyles:{fillColor:[254,226,226],textColor:[239,68,68],fontStyle:'bold',fontSize:8}});
   var pc=doc.internal.getNumberOfPages();for(var i=1;i<=pc;i++){doc.setPage(i);doc.setFontSize(7);doc.setTextColor(148,163,184);doc.text('BudgetKu - Hal '+i+' dari '+pc,105,290,{align:'center'});}
-  var uri=doc.output('datauristring'),fname='BudgetKu_Riwayat_'+(globalTglAwal||'').replace(/-/g,'')+'_'+(globalTglAkhir||'').replace(/-/g,'')+'.pdf';
+  var ta=tglAwal||globalTglAwal||'',tk=tglAkhir||globalTglAkhir||'';
+  var uri=doc.output('datauristring'),fname='BudgetKu_Riwayat_'+ta.replace(/-/g,'')+'_'+tk.replace(/-/g,'')+'.pdf';
   openPDFModal(uri,'Riwayat Transaksi',fname);toast('PDF siap!','success');
 }
 function exportBudgetPDF(){
   if(!appData||!appData.budgetList){toast('Data belum dimuat!','error');return;}
   if(!window.jspdf){toast('Library PDF belum siap, refresh halaman','error');return;}
-  var list=appData.budgetList||[];if(!list.length){toast('Belum ada anggaran','error');return;}
+  _pdfExportMode='budget';
+  showPdfPeriodModal('Export PDF Anggaran');
+}
+
+function doExportBudgetPDF(tglAwal, tglAkhir){
+  if(!appData){toast('Data belum dimuat!','error');return;}
+  // Jika periode berbeda dari aktif, perlu fetch data khusus periode itu
+  var useTglAwal = tglAwal || globalTglAwal;
+  var useTglAkhir = tglAkhir || globalTglAkhir;
+  var list;
+  // Filter budget list berdasarkan periode (dari appData yang sudah ada atau periode aktif)
+  if(tglAwal && tglAkhir && (tglAwal !== globalTglAwal || tglAkhir !== globalTglAkhir)){
+    // Periode berbeda - fetch data dulu
+    toast('Memuat data periode '+tglAwal+'...','info');
+    api('getAppData',{tglAwal:tglAwal,tglAkhir:tglAkhir}).then(function(r){
+      if(!r||!r.success){toast('Gagal memuat data: '+(r?r.error:''),'error');return;}
+      _doRenderBudgetPDF(r.budgetList||[], r.totalAnggaran||0, r.totalPengeluaran||0, r.totalSisaAnggaran||0, r.totalDefisit||0, tglAwal, tglAkhir);
+    });
+    return;
+  }
+  list=appData.budgetList||[];
+  if(!list.length){toast('Belum ada anggaran di periode ini','error');return;}
+  _doRenderBudgetPDF(list, appData.totalAnggaran||0, appData.totalPengeluaran||0, appData.totalSisaAnggaran||0, appData.totalDefisit||0, useTglAwal, useTglAkhir);
+}
+
+function _doRenderBudgetPDF(list, totAng, totTer, totSisa, totDef, tglAwal, tglAkhir){
+  if(!list.length){toast('Belum ada anggaran di periode ini','error');return;}
   toast('Membuat PDF...','info');
   var obj=getPDFDoc('PROGRESS ANGGARAN','Laporan Realisasi Anggaran per Kategori');var doc=obj.doc,startY=obj.startY;
-  var totAng=appData.totalAnggaran||0,totTer=appData.totalPengeluaran||0,totSisa=appData.totalSisaAnggaran||0,totDef=appData.totalDefisit||0,pctTot=totAng>0?Math.round((totTer/totAng)*100):0;
+  // Override periode
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(100,116,139);
+  doc.text('Periode: '+(tglAwal||'-')+' s/d '+(tglAkhir||'-'),14,38);
+  var pctTot=totAng>0?Math.round((totTer/totAng)*100):0;
   doc.setFillColor(238,242,255);doc.roundedRect(14,startY,182,26,3,3,'F');
   doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(79,70,229);
   doc.text('Total Anggaran: '+fRpPDF(totAng),18,startY+7);doc.text('Terpakai: '+fRpPDF(totTer)+' ('+pctTot+'%)',18,startY+13);
@@ -1127,8 +1227,63 @@ function exportBudgetPDF(){
   var finalY=doc.lastAutoTable.finalY+8;
   if(finalY<260){doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(30,41,59);doc.text('Visualisasi Progress',14,finalY);finalY+=5;list.forEach(function(b){if(finalY>272)return;var pct=Math.min(b.persen,100)/100,barW=120;doc.setFillColor(226,232,240);doc.roundedRect(14,finalY,barW,5,1,1,'F');var fc=b.sisa<0?[239,68,68]:b.persen>=80?[245,158,11]:[34,197,94];doc.setFillColor(fc[0],fc[1],fc[2]);if(pct>0)doc.roundedRect(14,finalY,barW*pct,5,1,1,'F');doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(30,41,59);doc.text(b.kategori.substring(0,20),136,finalY+4);doc.text(b.persen+'%',196,finalY+4,{align:'right'});finalY+=7;});}
   var pc=doc.internal.getNumberOfPages();for(var pg=1;pg<=pc;pg++){doc.setPage(pg);doc.setFontSize(7);doc.setTextColor(148,163,184);doc.text('BudgetKu - Hal '+pg+' dari '+pc,105,290,{align:'center'});}
-  var uri=doc.output('datauristring'),fname='BudgetKu_Anggaran_'+(globalTglAwal||'').replace(/-/g,'')+'_'+(globalTglAkhir||'').replace(/-/g,'')+'.pdf';
+  var uri=doc.output('datauristring'),fname='BudgetKu_Anggaran_'+(tglAwal||'').replace(/-/g,'')+'_'+(tglAkhir||'').replace(/-/g,'')+'.pdf';
   openPDFModal(uri,'Progress Anggaran',fname);toast('PDF siap!','success');
+}
+
+// ================================================================
+// PDF PERIOD PICKER
+// ================================================================
+async function showPdfPeriodModal(title){
+  document.getElementById('pdf-period-modal-title').textContent = title || 'Export PDF';
+  var listEl = document.getElementById('pdf-period-list');
+  var modal = document.getElementById('modal-pdf-period');
+  if(!modal || !listEl) return;
+  listEl.innerHTML = '<div class="period-empty"><i class="bi bi-hourglass-split"></i> Memuat...</div>';
+  modal.classList.add('show');
+  var r = await api('getAvailablePeriods');
+  var periodes = (r && r.success) ? (r.periodes || []) : [];
+  var html = '';
+  // Tambahkan periode aktif saat ini di paling atas jika ada
+  var aktifLabel = (globalTglAwal||'-') + ' s/d ' + (globalTglAkhir||'-');
+  html += '<div class="period-item pdf-period-current" onclick="selectPdfPeriod(''+escAttr(globalTglAwal)+'',''+escAttr(globalTglAkhir)+'')">'    + '<div class="period-item-icon"><i class="bi bi-calendar-check-fill" style="color:var(--primary);"></i></div>'    + '<div class="period-item-info">'      + '<div class="period-item-date">Periode Aktif: '+aktifLabel+'</div>'      + '<div class="period-item-count">Periode yang sedang aktif</div>'    + '</div><i class="bi bi-chevron-right period-item-arrow"></i></div>';
+  // Tambahkan periode lain dari riwayat
+  periodes.forEach(function(p){
+    var tA = p.tglAwal||'-', tK = p.tglAkhir||'-';
+    if(tA === globalTglAwal && tK === globalTglAkhir) return; // Skip duplikat periode aktif
+    var label = tA + ' s/d ' + tK;
+    var count = (p.budgets||[]).length;
+    html += '<div class="period-item" onclick="selectPdfPeriod(''+escAttr(tA)+'',''+escAttr(tK)+'')">'      + '<div class="period-item-icon"><i class="bi bi-calendar-range-fill"></i></div>'      + '<div class="period-item-info">'        + '<div class="period-item-date">'+label+'</div>'        + '<div class="period-item-count">'+count+' kategori anggaran</div>'      + '</div><i class="bi bi-chevron-right period-item-arrow"></i></div>';
+  });
+  if(!periodes.length && !globalTglAwal){
+    html = '<div class="period-empty"><i class="bi bi-inbox"></i><br>Belum ada periode tersimpan</div>';
+  }
+  listEl.innerHTML = html;
+}
+
+function escAttr(s){ return String(s||'').replace(/'/g,"\'"); }
+
+function selectPdfPeriod(tglAwal, tglAkhir){
+  closePdfPeriodModal();
+  if(_pdfExportMode === 'riwayat'){
+    doExportRiwayatPDF(tglAwal, tglAkhir);
+  } else if(_pdfExportMode === 'budget'){
+    doExportBudgetPDF(tglAwal, tglAkhir);
+  }
+}
+
+function doPdfExportCurrentPeriod(){
+  closePdfPeriodModal();
+  if(_pdfExportMode === 'riwayat'){
+    doExportRiwayatPDF(globalTglAwal, globalTglAkhir);
+  } else if(_pdfExportMode === 'budget'){
+    doExportBudgetPDF(globalTglAwal, globalTglAkhir);
+  }
+}
+
+function closePdfPeriodModal(){
+  var m = document.getElementById('modal-pdf-period');
+  if(m) m.classList.remove('show');
 }
 
 // ================================================================
