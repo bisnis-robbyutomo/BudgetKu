@@ -486,9 +486,10 @@
 
     <!-- BUDGET -->
     <div id="page-budget" class="page">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:6px;">
         <div class="page-title" style="margin-bottom:0;flex:1;"><i class="bi bi-shield-check"></i> Budget</div>
         <button class="btn-sm-action" onclick="exportBudgetPDF()" style="font-size:.67rem;padding:6px 9px;background:#0f766e;"><i class="bi bi-file-earmark-pdf-fill"></i> PDF</button>
+        <button class="btn-sm-action danger" onclick="hapusSemuaBudgetConfirm()" style="font-size:.67rem;padding:6px 9px;"><i class="bi bi-trash3-fill"></i> Hapus Semua</button>
       </div>
       <!-- Global Period -->
       <div class="card" id="global-period-card">
@@ -569,7 +570,7 @@
 // ================================================================
 // KONFIGURASI - WAJIB DIISI SETELAH DEPLOY GAS
 // ================================================================
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbzbd9qHX9RdFhPDj8xJGO8y7-hJs1Wey1hiKV5qEe4-0f9BGMMBM8JLNQH7Aiy6jy1M/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbwB3y4_uEvpJbClnJ0G-x5UVS8hepivMKHNe6_q0aQzuswWCYOgjk9qlrOam8DRCcty/exec';
 // Contoh: 'https://script.google.com/macros/s/AKfycb.../exec'
 
 // ================================================================
@@ -933,10 +934,19 @@ function editBudgetForm(kat,limit,tglA,tglK){document.getElementById('budget-edi
 function cancelEditBudget(){document.getElementById('budget-edit-kat-orig').value='';document.getElementById('budget-kat-sel').value='';document.getElementById('budget-limit').value='';document.getElementById('budget-form-title').innerHTML='<i class="bi bi-pencil-square"></i> Tambah Budget';document.getElementById('btn-cancel-edit-budget').style.display='none';}
 function hapusBudgetByIdx(btn){var b=(appData.budgetList||[])[parseInt(btn.dataset.bidx)];if(!b)return;hapusBudgetConfirm(b.kategori);}
 async function hapusBudgetConfirm(kat){
-  if(!confirm('Hapus budget "'+kat+'"?'))return;
-  var r=await api('hapusBudget',{kategori:kat});
+  if(!confirm('Hapus budget "'+kat+'" untuk periode ini?'))return;
+  var r=await api('hapusBudget',{kategori:kat,tglAwal:globalTglAwal,tglAkhir:globalTglAkhir});
   if(r&&r.success){toast('Budget dihapus','success');loadData();}else{toast(r?r.error:'Gagal','error');}
 }
+async function hapusSemuaBudgetConfirm(){
+  if(!confirm('HAPUS SEMUA anggaran di periode ini?\n'+globalTglAwal+' s/d '+globalTglAkhir+'\n\nTindakan tidak dapat dibatalkan!'))return;
+  var r=await api('hapusSemuaBudgetPeriode',{tglAwal:globalTglAwal,tglAkhir:globalTglAkhir});
+  if(r&&r.success){
+    toast((r.deleted||0)+' anggaran dihapus','success');
+    loadData();
+  }else{toast(r?r.error:'Gagal','error');}
+}
+
 // === PERIOD PICKER ===
 async function copyBudgetBulanLalu(){
   // Tampilkan modal period picker
