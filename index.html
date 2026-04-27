@@ -224,6 +224,9 @@
     .dana-menganggur-badge { display:inline-flex; align-items:center; gap:5px; background:#f0fdf4; color:#059669; border-radius:10px; padding:5px 11px; font-size:.74rem; font-weight:700; margin-bottom:10px; margin-left:6px; border:1px solid #bbf7d0; }
 
     /* AKUN */
+    .total-saldo-bar { display:flex; align-items:center; justify-content:space-between; background:linear-gradient(135deg,#f0fdf4,#dcfce7); border-radius:12px; padding:10px 14px; margin-bottom:10px; border:1px solid #bbf7d0; }
+    .total-saldo-bar .tsb-label { font-size:.63rem; color:#059669; font-weight:700; text-transform:uppercase; letter-spacing:.4px; display:flex; align-items:center; gap:5px; }
+    .total-saldo-bar .tsb-val { font-size:.95rem; font-weight:900; color:#059669; }
     .akun-item { display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid #f1f5f9; }
     .akun-item:last-child { border-bottom:none; }
     .akun-info { display:flex; align-items:center; gap:9px; }
@@ -394,10 +397,10 @@
           <div class="mc-label">Pemasukan</div>
           <div class="mc-val" id="total-income" style="color:#22c55e;">Rp 0</div>
         </div>
-        <div class="mini-card">
-          <div class="mc-icon"><i class="bi bi-arrow-up-circle-fill" style="color:#ef4444;font-size:1.3rem;"></i></div>
-          <div class="mc-label">Pengeluaran</div>
-          <div class="mc-val" id="total-expense" style="color:#ef4444;">Rp 0</div>
+        <div class="mini-card" id="card-dana-menganggur" style="background:#f0fdf4;border-color:#bbf7d0;">
+          <div class="mc-icon"><i class="bi bi-bank2" style="color:#059669;font-size:1.3rem;"></i></div>
+          <div class="mc-label">Dana Menganggur</div>
+          <div class="mc-val" id="total-dana-menganggur" style="color:#059669;">Rp 0</div>
         </div>
         <div class="mini-card">
           <div class="mc-icon"><i class="bi bi-piggy-bank-fill" style="color:#4f46e5;font-size:1.3rem;"></i></div>
@@ -480,6 +483,10 @@
             <input type="text" id="input-akun" class="form-control" placeholder="Nama akun..." style="flex:2;min-width:100px;" />
             <input type="text" id="input-akun-saldo" class="form-control" placeholder="Saldo awal (Rp)" inputmode="numeric" oninput="formatCurrencyInput(this)" style="flex:2;min-width:100px;" />
             <button class="btn-sm-action" id="btn-add-akun" onclick="tambahAkun()"><i class="bi bi-plus-lg"></i> Tambah</button>
+          </div>
+          <div class="total-saldo-bar" id="total-saldo-bar" style="display:none;">
+            <div class="tsb-label"><i class="bi bi-wallet2"></i> Total Saldo Akun</div>
+            <div class="tsb-val" id="total-saldo-akun-val">Rp 0</div>
           </div>
           <div id="akun-display-list" style="margin-top:10px;"></div>
         </div>
@@ -731,7 +738,11 @@ function renderDropdowns(){
 function renderStat(){
   document.getElementById('total-bulan-ini').textContent=fRp(appData.totalPengeluaran||0);
   document.getElementById('total-income').textContent=fRp(appData.totalPemasukan||0);
-  document.getElementById('total-expense').textContent=fRp(appData.totalPengeluaran||0);
+  // Dana Menganggur = total saldo akun - total anggaran, min 0
+  var totalSaldoAkun=(appData.akunWithSaldo||[]).reduce(function(s,a){return s+(a.saldo||0);},0);
+  var totAng=appData.totalAnggaran||0;
+  var danaMenganggur=Math.max(0, totalSaldoAkun - totAng);
+  document.getElementById('total-dana-menganggur').textContent=fRp(danaMenganggur);
   document.getElementById('total-sisa-anggaran').textContent=fRp(appData.totalSisaAnggaran||0);
   var def=appData.totalDefisit||0;
   document.getElementById('total-defisit').textContent=fRp(def);
@@ -796,6 +807,14 @@ function renderSetup(){
   var kats=appData.kategoriList||[];
   document.getElementById('kat-list').innerHTML=kats.length?kats.map(function(k){return '<span class="tag"><i class="bi bi-tag"></i>'+esc(k)+'<button class="tag-del" data-k="'+esc(k)+'" onclick="hapusKat(this.dataset.k)"><i class="bi bi-x-lg"></i></button></span>';}).join(''):'<span style="color:var(--muted);font-size:.76rem;">Belum ada kategori</span>';
   var akuns=appData.akunWithSaldo||[];
+  // Hitung & tampilkan total saldo akun
+  var totalSaldo=akuns.reduce(function(s,a){return s+(a.saldo||0);},0);
+  var tsBar=document.getElementById('total-saldo-bar');
+  var tsVal=document.getElementById('total-saldo-akun-val');
+  if(tsBar && tsVal){
+    if(akuns.length){tsBar.style.display='flex';tsVal.textContent=fRp(totalSaldo);}
+    else{tsBar.style.display='none';}
+  }
   document.getElementById('akun-display-list').innerHTML=akuns.length?akuns.map(function(a){return '<div class="akun-item"><div class="akun-info"><div class="akun-icon"><i class="bi bi-credit-card-fill"></i></div><div><div class="akun-name">'+esc(a.nama)+'</div><div class="akun-saldo" style="color:'+(a.saldo<0?'var(--danger)':'var(--success)')+'">'+fRp(a.saldo)+'</div></div></div><button class="akun-del-btn" data-n="'+esc(a.nama)+'" onclick="hapusAkunConfirm(this.dataset.n)"><i class="bi bi-trash-fill"></i></button></div>';}).join(''):'<p style="color:var(--muted);font-size:.76rem;margin-top:6px;">Belum ada akun</p>';
 }
 
@@ -1234,41 +1253,70 @@ function _doRenderBudgetPDF(list, totAng, totTer, totSisa, totDef, tglAwal, tglA
 // ================================================================
 // PDF PERIOD PICKER
 // ================================================================
+// Simpan daftar periode yang dirender agar tidak perlu pass string lewat onclick
+window._pdfPeriodeItems = [];
+
 async function showPdfPeriodModal(title){
   document.getElementById('pdf-period-modal-title').textContent = title || 'Export PDF';
   var listEl = document.getElementById('pdf-period-list');
   var modal = document.getElementById('modal-pdf-period');
   if(!modal || !listEl) return;
+  window._pdfPeriodeItems = [];
   listEl.innerHTML = '<div class="period-empty"><i class="bi bi-hourglass-split"></i> Memuat...</div>';
   modal.classList.add('show');
+
   var r = await api('getAvailablePeriods');
   var periodes = (r && r.success) ? (r.periodes || []) : [];
-  var html = '';
-  // Tambahkan periode aktif saat ini di paling atas jika ada
-  var aktifLabel = (globalTglAwal||'-') + ' s/d ' + (globalTglAkhir||'-');
-  html += '<div class="period-item pdf-period-current" onclick="selectPdfPeriod(''+escAttr(globalTglAwal)+'',''+escAttr(globalTglAkhir)+'')">'    + '<div class="period-item-icon"><i class="bi bi-calendar-check-fill" style="color:var(--primary);"></i></div>'    + '<div class="period-item-info">'      + '<div class="period-item-date">Periode Aktif: '+aktifLabel+'</div>'      + '<div class="period-item-count">Periode yang sedang aktif</div>'    + '</div><i class="bi bi-chevron-right period-item-arrow"></i></div>';
-  // Tambahkan periode lain dari riwayat
+  var items = [];
+
+  // Index 0: periode aktif saat ini
+  items.push({ tglAwal: globalTglAwal, tglAkhir: globalTglAkhir, isAktif: true,
+    label: 'Periode Aktif: '+(globalTglAwal||'-')+' s/d '+(globalTglAkhir||'-'),
+    sub: 'Periode yang sedang aktif' });
+
+  // Index 1+: periode lain dari riwayat budget
   periodes.forEach(function(p){
-    var tA = p.tglAwal||'-', tK = p.tglAkhir||'-';
-    if(tA === globalTglAwal && tK === globalTglAkhir) return; // Skip duplikat periode aktif
-    var label = tA + ' s/d ' + tK;
+    var tA = p.tglAwal||'', tK = p.tglAkhir||'';
+    if(tA === globalTglAwal && tK === globalTglAkhir) return; // skip duplikat
     var count = (p.budgets||[]).length;
-    html += '<div class="period-item" onclick="selectPdfPeriod(''+escAttr(tA)+'',''+escAttr(tK)+'')">'      + '<div class="period-item-icon"><i class="bi bi-calendar-range-fill"></i></div>'      + '<div class="period-item-info">'        + '<div class="period-item-date">'+label+'</div>'        + '<div class="period-item-count">'+count+' kategori anggaran</div>'      + '</div><i class="bi bi-chevron-right period-item-arrow"></i></div>';
+    items.push({ tglAwal: tA, tglAkhir: tK, isAktif: false,
+      label: (tA||'-')+' s/d '+(tK||'-'),
+      sub: count+' kategori anggaran' });
   });
-  if(!periodes.length && !globalTglAwal){
-    html = '<div class="period-empty"><i class="bi bi-inbox"></i><br>Belum ada periode tersimpan</div>';
+
+  window._pdfPeriodeItems = items;
+
+  if(items.length === 0){
+    listEl.innerHTML = '<div class="period-empty"><i class="bi bi-inbox"></i><br>Belum ada periode tersimpan</div>';
+    return;
   }
+
+  var html = items.map(function(item, idx){
+    var cls = item.isAktif ? 'period-item pdf-period-current' : 'period-item';
+    var icon = item.isAktif
+      ? '<i class="bi bi-calendar-check-fill" style="color:var(--primary);"></i>'
+      : '<i class="bi bi-calendar-range-fill"></i>';
+    return '<div class="'+cls+'" data-pidx="'+idx+'" onclick="selectPdfPeriodByIdx(this.dataset.pidx)">'
+      + '<div class="period-item-icon">'+icon+'</div>'
+      + '<div class="period-item-info">'
+        + '<div class="period-item-date">'+item.label+'</div>'
+        + '<div class="period-item-count">'+item.sub+'</div>'
+      + '</div>'
+      + '<i class="bi bi-chevron-right period-item-arrow"></i>'
+      + '</div>';
+  }).join('');
+
   listEl.innerHTML = html;
 }
 
-function escAttr(s){ return String(s||'').replace(/'/g,"\'"); }
-
-function selectPdfPeriod(tglAwal, tglAkhir){
+function selectPdfPeriodByIdx(idx){
+  var item = (window._pdfPeriodeItems||[])[parseInt(idx)];
+  if(!item) return;
   closePdfPeriodModal();
   if(_pdfExportMode === 'riwayat'){
-    doExportRiwayatPDF(tglAwal, tglAkhir);
+    doExportRiwayatPDF(item.tglAwal, item.tglAkhir);
   } else if(_pdfExportMode === 'budget'){
-    doExportBudgetPDF(tglAwal, tglAkhir);
+    doExportBudgetPDF(item.tglAwal, item.tglAkhir);
   }
 }
 
