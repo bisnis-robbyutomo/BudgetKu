@@ -392,7 +392,7 @@
           <div class="mc-label">Sisa Anggaran</div>
           <div class="mc-val" id="total-sisa-anggaran" style="color:#4f46e5;">Rp 0</div>
         </div>
-        <div class="mini-card" id="card-defisit" style="display:none;">
+        <div class="mini-card" id="card-defisit">
           <div class="mc-icon"><i class="bi bi-exclamation-triangle-fill" style="color:#ef4444;font-size:1.3rem;"></i></div>
           <div class="mc-label">Total Defisit</div>
           <div class="mc-val" id="total-defisit" style="color:#ef4444;">Rp 0</div>
@@ -570,7 +570,7 @@
 // ================================================================
 // KONFIGURASI - WAJIB DIISI SETELAH DEPLOY GAS
 // ================================================================
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbwB3y4_uEvpJbClnJ0G-x5UVS8hepivMKHNe6_q0aQzuswWCYOgjk9qlrOam8DRCcty/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycby3YUybF4-Z_nb6oID7-ImiZ9K8p6Xd7TW1AweXpynkHrsFqFOGABVKewJVMiEOCSk/exec';
 // Contoh: 'https://script.google.com/macros/s/AKfycb.../exec'
 
 // ================================================================
@@ -637,8 +637,8 @@ async function doLogin(){
     try{sessionStorage.setItem('bk_auth',authToken);}catch(e){}
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app-wrap').style.display='';
-    loadGlobalPeriod();
-    loadData();
+    // loadGlobalPeriod async: tunggu selesai baru loadData
+    loadGlobalPeriod().then(function(){ loadData(); });
   } else {
     var errEl=document.getElementById('login-err');
     errEl.style.display='block';
@@ -706,8 +706,7 @@ function renderStat(){
   document.getElementById('total-expense').textContent=fRp(appData.totalPengeluaran||0);
   document.getElementById('total-sisa-anggaran').textContent=fRp(appData.totalSisaAnggaran||0);
   var def=appData.totalDefisit||0;
-  var cd=document.getElementById('card-defisit');
-  if(def>0){document.getElementById('total-defisit').textContent=fRp(def);if(cd)cd.style.display='block';}else{if(cd)cd.style.display='none';}
+  document.getElementById('total-defisit').textContent=fRp(def);
   var bl=appData.budgetList||[];
   document.getElementById('stat-sub').textContent=bl.length?'dari total limit '+fRp(appData.totalAnggaran||0):'Belum ada limit budget';
 }
@@ -879,20 +878,52 @@ async function doTransfer(){
 // ================================================================
 // ACTIONS - Budget
 // ================================================================
-function loadGlobalPeriod(){
+async function loadGlobalPeriod(){
+  // Coba baca dari sessionStorage dulu (cache lokal agar cepat)
   try{
     var s=sessionStorage.getItem('budgetPeriod');
-    if(s){var p=JSON.parse(s);globalTglAwal=p.awal||'';globalTglAkhir=p.akhir||'';}
+    if(s){
+      var p=JSON.parse(s);
+      if(p.awal && p.akhir){
+        globalTglAwal=p.awal;
+        globalTglAkhir=p.akhir;
+        updatePeriodUI();
+        return; // Sudah ada cache, skip DB call
+      }
+    }
   }catch(e){}
+
+  // Belum ada cache -> baca dari database GAS
+  try{
+    var r = await api('getPeriodeAktif');
+    if(r && r.success && r.tglAwal && r.tglAkhir){
+      globalTglAwal  = r.tglAwal;
+      globalTglAkhir = r.tglAkhir;
+      // Simpan ke sessionStorage sebagai cache
+      try{ sessionStorage.setItem('budgetPeriod', JSON.stringify({awal:globalTglAwal, akhir:globalTglAkhir})); }catch(e){}
+      updatePeriodUI();
+      return;
+    }
+  }catch(e){}
+
+  // Fallback: default periode (28 bulan ini s/d 27 bulan depan)
   if(!globalTglAwal||!globalTglAkhir){
     var d=new Date();
     var fmt=function(dt){return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');};
-    globalTglAwal=fmt(new Date(d.getFullYear(),d.getMonth(),28));
-    globalTglAkhir=fmt(new Date(d.getFullYear(),d.getMonth()+1,27));
+    globalTglAwal  = fmt(new Date(d.getFullYear(), d.getMonth(), 28));
+    globalTglAkhir = fmt(new Date(d.getFullYear(), d.getMonth()+1, 27));
   }
   updatePeriodUI();
 }
-function saveGlobalPeriod(awal,akhir){globalTglAwal=awal;globalTglAkhir=akhir;try{sessionStorage.setItem('budgetPeriod',JSON.stringify({awal:awal,akhir:akhir}));}catch(e){}updatePeriodUI();}
+function saveGlobalPeriod(awal, akhir){
+  globalTglAwal  = awal;
+  globalTglAkhir = akhir;
+  // Simpan ke sessionStorage (cache cepat)
+  try{ sessionStorage.setItem('budgetPeriod', JSON.stringify({awal:awal, akhir:akhir})); }catch(e){}
+  // Simpan ke database GAS (persisten lintas sesi)
+  api('savePeriodeAktif', {tglAwal:awal, tglAkhir:akhir}).catch(function(){});
+  updatePeriodUI();
+}
 function updatePeriodUI(){
   // Update label display
   var el=document.getElementById('period-label');
@@ -1116,8 +1147,8 @@ function exportBudgetPDF(){
       authToken=saved;
       document.getElementById('login-screen').style.display='none';
       document.getElementById('app-wrap').style.display='';
-      loadGlobalPeriod();
-      loadData();
+      // loadGlobalPeriod async: tunggu selesai baru loadData
+      loadGlobalPeriod().then(function(){ loadData(); });
       return;
     }
   }catch(e){}
