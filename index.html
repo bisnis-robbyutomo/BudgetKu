@@ -821,7 +821,7 @@ function renderStat(){
   document.getElementById('total-income').textContent=fRp(appData.totalPemasukan||0);
   // Dana Menganggur = total saldo akun - total anggaran, min 0
   var totalSaldoAkun=(appData.akunWithSaldo||[]).reduce(function(s,a){return s+(a.saldo||0);},0);
-  var danaMenganggur=Math.max(0, totalSaldoAkun - (appData.totalAnggaran||0) - (appData.totalPengeluaran||0));
+  var danaMenganggur=Math.max(0, totalSaldoAkun - ((appData.totalAnggaran||0) - (appData.totalPengeluaran||0)));
   document.getElementById('total-dana-menganggur').textContent=fRp(danaMenganggur);
   document.getElementById('total-sisa-anggaran').textContent=fRp(appData.totalSisaAnggaran||0);
   var def=appData.totalDefisit||0;
@@ -1073,7 +1073,7 @@ function renderBudget(){
   // Hitung total saldo semua akun
   var totalSaldoAkun = (appData.akunWithSaldo||[]).reduce(function(s,a){return s+(a.saldo||0);},0);
   // Dana Menganggur = total saldo akun - total limit anggaran - total pengeluaran, min 0
-  var danaMenganggur = Math.max(0, totalSaldoAkun - (appData.totalAnggaran||0) - (appData.totalPengeluaran||0));
+  var danaMenganggur = Math.max(0, totalSaldoAkun - ((appData.totalAnggaran||0) - (appData.totalPengeluaran||0)));
   if(totAng>0){
     wr.style.display='';
     document.getElementById('total-anggaran-val').textContent=fRp(totAng);
