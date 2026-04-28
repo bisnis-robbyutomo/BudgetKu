@@ -703,8 +703,8 @@ var authToken = '';
 var globalTglAwal = '', globalTglAkhir = '';
 
 var CAT_ICONS = ['bi-cup-hot-fill','bi-car-front-fill','bi-bag-fill','bi-controller','bi-lightning-charge-fill','bi-heart-pulse-fill','bi-three-dots','bi-box-seam','bi-star-fill'];
-var COLORS = ['#4f46e5','#06b6d4','#22c55e','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316'];
-var INCOME_COLORS = ['#22c55e','#3b82f6','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#f97316','#a3e635','#14b8a6','#e11d48'];
+var COLORS = ['#4f46e5','#06b6d4','#22c55e','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#a3e635','#e11d48','#0ea5e9','#d97706','#7c3aed','#db2777','#059669','#dc2626','#2563eb','#65a30d','#0891b2'];
+var INCOME_COLORS = ['#22c55e','#3b82f6','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#f97316','#a3e635','#14b8a6','#e11d48','#4f46e5','#dc2626','#0891b2','#d97706','#7c3aed','#db2777','#059669','#2563eb','#65a30d','#0ea5e9'];
 
 // ================================================================
 // API HELPER - fetch ke GAS dengan doPost
@@ -1017,7 +1017,8 @@ function renderPie(){
   var cv=document.getElementById('pieChart'),em=document.getElementById('pie-empty');
   if(!lb.length){cv.style.display='none';em.style.display='block';return;}
   cv.style.display='block';em.style.display='none';
-  pieInst=new Chart(cv,{type:'doughnut',data:{labels:lb,datasets:[{data:vl,backgroundColor:COLORS.slice(0,lb.length),borderWidth:3,borderColor:'#fff',hoverOffset:10}]},options:{responsive:true,maintainAspectRatio:true,cutout:'58%',plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:10,boxWidth:11}},tooltip:{callbacks:{label:function(c){return ' '+c.label+': '+fRp(c.raw);}}}}}});
+  var bgColors=lb.map(function(_,i){return COLORS[i%COLORS.length];});
+  pieInst=new Chart(cv,{type:'doughnut',data:{labels:lb,datasets:[{data:vl,backgroundColor:bgColors,borderWidth:3,borderColor:'#fff',hoverOffset:10}]},options:{responsive:true,maintainAspectRatio:true,cutout:'58%',plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:10,boxWidth:11,generateLabels:function(chart){var ds=chart.data.datasets[0];return chart.data.labels.map(function(lbl,i){return{text:lbl,fillStyle:ds.backgroundColor[i],strokeStyle:'#fff',lineWidth:2,index:i};});}}},tooltip:{callbacks:{label:function(c){return ' '+c.label+': '+fRp(c.raw);}}}}}});
 }
 
 function renderIncomeChart(){
