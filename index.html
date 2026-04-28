@@ -1022,11 +1022,14 @@ function renderPie(){
 
 function renderIncomeChart(){
   var lb=appData.incomeChartLabels||[],vl=appData.incomeChartValues||[];
+  console.log('[IncomeChart] labels:', lb, 'values:', vl);
   if(incomeInst){incomeInst.destroy();incomeInst=null;}
   var cv=document.getElementById('incomeChart'),em=document.getElementById('income-chart-empty');
   if(!lb.length){cv.style.display='none';em.style.display='block';return;}
   cv.style.display='block';em.style.display='none';
-  incomeInst=new Chart(cv,{type:'doughnut',data:{labels:lb,datasets:[{data:vl,backgroundColor:INCOME_COLORS.slice(0,lb.length),borderWidth:3,borderColor:'#fff',hoverOffset:10}]},options:{responsive:true,maintainAspectRatio:true,cutout:'58%',plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:10,boxWidth:11}},tooltip:{callbacks:{label:function(c){return ' '+c.label+': '+fRp(c.raw);}}}}}});
+  // Pastikan warna cukup untuk semua label
+  var bgColors=lb.map(function(_,i){return INCOME_COLORS[i%INCOME_COLORS.length];});
+  incomeInst=new Chart(cv,{type:'doughnut',data:{labels:lb,datasets:[{data:vl,backgroundColor:bgColors,borderWidth:3,borderColor:'#fff',hoverOffset:10}]},options:{responsive:true,maintainAspectRatio:true,cutout:'58%',plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:10,boxWidth:11,generateLabels:function(chart){var ds=chart.data.datasets[0];return chart.data.labels.map(function(lbl,i){return{text:lbl,fillStyle:ds.backgroundColor[i],strokeStyle:'#fff',lineWidth:2,index:i};});}}},tooltip:{callbacks:{label:function(c){return ' '+c.label+': '+fRp(c.raw);}}}}}});
 }
 
 function renderRiwayat(){
