@@ -227,6 +227,27 @@
     .total-saldo-bar { display:flex; align-items:center; justify-content:space-between; background:linear-gradient(135deg,#f0fdf4,#dcfce7); border-radius:12px; padding:10px 14px; margin-bottom:10px; border:1px solid #bbf7d0; }
     .total-saldo-bar .tsb-label { font-size:.63rem; color:#059669; font-weight:700; text-transform:uppercase; letter-spacing:.4px; display:flex; align-items:center; gap:5px; }
     .total-saldo-bar .tsb-val { font-size:.95rem; font-weight:900; color:#059669; }
+
+    /* VISIBILITY TOGGLE SETUP */
+    .vis-toggle-card { background:#fff; border-radius:16px; border:1px solid var(--border); padding:14px 15px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,.04); }
+    .vis-toggle-title { font-size:.78rem; font-weight:800; color:var(--text); margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+    .vis-toggle-title i { color:var(--primary); }
+    .vis-row { display:flex; align-items:center; justify-content:space-between; padding:7px 0; border-bottom:1px solid #f1f5f9; }
+    .vis-row:last-child { border-bottom:none; }
+    .vis-row-label { font-size:.77rem; color:var(--text); display:flex; align-items:center; gap:7px; }
+    .vis-row-label i { color:var(--muted); font-size:.9rem; }
+    /* Toggle switch */
+    .toggle-sw { position:relative; display:inline-block; width:42px; height:24px; flex-shrink:0; }
+    .toggle-sw input { opacity:0; width:0; height:0; }
+    .toggle-sw .slider { position:absolute; cursor:pointer; inset:0; background:#cbd5e1; border-radius:24px; transition:.25s; }
+    .toggle-sw .slider:before { position:absolute; content:""; height:18px; width:18px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.25s; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+    .toggle-sw input:checked + .slider { background:var(--primary); }
+    .toggle-sw input:checked + .slider:before { transform:translateX(18px); }
+
+    /* TREN CHART */
+    .tren-chart-wrap { position:relative; padding:4px 0; }
+    .tren-chart-wrap canvas { max-height:200px; }
+    .tren-export-row { display:flex; justify-content:flex-end; margin-top:8px; }
     .akun-item { display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid #f1f5f9; }
     .akun-item:last-child { border-bottom:none; }
     .akun-info { display:flex; align-items:center; gap:9px; }
@@ -427,6 +448,17 @@
           <div id="income-chart-empty" class="empty-state" style="display:none;"><i class="bi bi-bar-chart"></i><p>Belum ada pemasukan</p></div>
         </div>
       </div>
+      <!-- TREN PENGELUARAN -->
+      <div class="card" id="card-tren-pengeluaran">
+        <div class="card-head" style="display:flex;align-items:center;justify-content:space-between;">
+          <span><i class="bi bi-graph-up-arrow"></i> Tren Pengeluaran</span>
+          <button onclick="exportTrenCSV()" class="btn-sm-action" style="font-size:.67rem;padding:5px 9px;background:#0f766e;"><i class="bi bi-filetype-csv"></i> Export CSV</button>
+        </div>
+        <div class="card-body">
+          <div class="tren-chart-wrap"><canvas id="trenChart"></canvas></div>
+          <div id="tren-empty" class="empty-state" style="display:none;"><i class="bi bi-graph-up"></i><p>Belum ada data tren</p></div>
+        </div>
+      </div>
     </div>
 
     <!-- CATAT -->
@@ -466,6 +498,30 @@
     <!-- SETUP -->
     <div id="page-setup" class="page">
       <div class="page-title"><i class="bi bi-gear-fill"></i> Pengaturan</div>
+      <!-- VISIBILITY TOGGLE -->
+      <div class="vis-toggle-card">
+        <div class="vis-toggle-title"><i class="bi bi-eye-fill"></i> Tampilkan / Sembunyikan</div>
+        <div class="vis-row">
+          <div class="vis-row-label"><i class="bi bi-pie-chart-fill"></i> Komposisi Pengeluaran</div>
+          <label class="toggle-sw"><input type="checkbox" id="toggle-pie" onchange="applyVisibility()" checked><span class="slider"></span></label>
+        </div>
+        <div class="vis-row">
+          <div class="vis-row-label"><i class="bi bi-pie-chart"></i> Komposisi Pemasukan</div>
+          <label class="toggle-sw"><input type="checkbox" id="toggle-income" onchange="applyVisibility()" checked><span class="slider"></span></label>
+        </div>
+        <div class="vis-row">
+          <div class="vis-row-label"><i class="bi bi-graph-up-arrow"></i> Tren Pengeluaran</div>
+          <label class="toggle-sw"><input type="checkbox" id="toggle-tren" onchange="applyVisibility()" checked><span class="slider"></span></label>
+        </div>
+        <div class="vis-row">
+          <div class="vis-row-label"><i class="bi bi-piggy-bank-fill"></i> Card Dana Menganggur</div>
+          <label class="toggle-sw"><input type="checkbox" id="toggle-dana-menganggur" onchange="applyVisibility()" checked><span class="slider"></span></label>
+        </div>
+        <div class="vis-row">
+          <div class="vis-row-label"><i class="bi bi-exclamation-triangle-fill"></i> Card Total Defisit</div>
+          <label class="toggle-sw"><input type="checkbox" id="toggle-defisit" onchange="applyVisibility()" checked><span class="slider"></span></label>
+        </div>
+      </div>
       <div class="card">
         <div class="card-head"><i class="bi bi-tags-fill"></i> Kategori</div>
         <div class="card-body">
@@ -609,6 +665,23 @@
   </div>
 </div>
 
+<!-- MODAL PILIH KATEGORI SALIN -->
+<div id="modal-salin-kategori" onclick="if(event.target===this)closeModalSalinKat()" style="position:fixed;inset:0;z-index:7100;background:rgba(0,0,0,.5);display:none;align-items:flex-end;justify-content:center;">
+  <div style="background:#fff;border-radius:24px 24px 0 0;width:100%;max-width:520px;padding:20px 18px 32px;">
+    <div style="font-size:.98rem;font-weight:800;margin-bottom:2px;color:var(--text);display:flex;align-items:center;gap:7px;"><i class="bi bi-clipboard-check-fill" style="color:#059669;"></i> Pilih Kategori yang Disalin</div>
+    <div style="font-size:.72rem;color:var(--muted);margin-bottom:12px;" id="salin-kat-subtitle">dari periode ...</div>
+    <div style="display:flex;gap:7px;margin-bottom:10px;">
+      <button class="btn-sm-action" onclick="toggleAllSalinKat(true)" style="font-size:.72rem;flex:1;justify-content:center;"><i class="bi bi-check-all"></i> Semua</button>
+      <button class="btn-sm-action" onclick="toggleAllSalinKat(false)" style="font-size:.72rem;flex:1;justify-content:center;background:#64748b;"><i class="bi bi-x-lg"></i> Hapus Semua</button>
+    </div>
+    <div id="salin-kat-list" style="max-height:280px;overflow-y:auto;margin-bottom:12px;"></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-primary-full" onclick="doSalinSelectedKat()" style="flex:1;"><i class="bi bi-clipboard-check"></i> Salin Terpilih</button>
+      <button class="btn-sm-action" onclick="closeModalSalinKat()" style="background:#64748b;"><i class="bi bi-x-lg"></i> Batal</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ================================================================
 // KONFIGURASI - WAJIB DIISI SETELAH DEPLOY GAS
@@ -728,7 +801,7 @@ function renderAll(){
   if(!appData) return;
   var hdr=(appData.bulan||'')+' &nbsp;&middot;&nbsp; '+(globalTglAwal||appData.tglAwal||'')+' - '+(globalTglAkhir||appData.tglAkhir||'');
   document.getElementById('header-month').innerHTML=hdr;
-  renderDropdowns();renderStat();renderPie();renderIncomeChart();renderRiwayat();renderSetup();renderBudget();
+  renderDropdowns();renderStat();renderPie();renderIncomeChart();renderTrenChart();renderRiwayat();renderSetup();renderBudget();applyVisibility();
 }
 
 function fillSel(id,items,ph){var s=document.getElementById(id);if(!s)return;var cur=s.value;s.innerHTML='<option value="">'+ph+'</option>';(items||[]).forEach(function(v){var o=document.createElement('option');o.value=v;o.textContent=v;if(v===cur)o.selected=true;s.appendChild(o);});}
@@ -748,8 +821,7 @@ function renderStat(){
   document.getElementById('total-income').textContent=fRp(appData.totalPemasukan||0);
   // Dana Menganggur = total saldo akun - total anggaran, min 0
   var totalSaldoAkun=(appData.akunWithSaldo||[]).reduce(function(s,a){return s+(a.saldo||0);},0);
-  var totAng=appData.totalAnggaran||0;
-  var danaMenganggur=Math.max(0, totalSaldoAkun - totAng);
+  var danaMenganggur=Math.max(0, totalSaldoAkun - (appData.totalAnggaran||0) - (appData.totalPengeluaran||0));
   document.getElementById('total-dana-menganggur').textContent=fRp(danaMenganggur);
   document.getElementById('total-sisa-anggaran').textContent=fRp(appData.totalSisaAnggaran||0);
   var def=appData.totalDefisit||0;
@@ -759,6 +831,175 @@ function renderStat(){
   if(cardDef) cardDef.style.display='';
   var bl=appData.budgetList||[];
   document.getElementById('stat-sub').textContent=bl.length?'dari total limit '+fRp(appData.totalAnggaran||0):'Belum ada limit budget';
+}
+
+// ================================================================
+// TREN PENGELUARAN + EXPORT CSV
+// ================================================================
+var trenInst = null;
+
+function renderTrenChart(){
+  var allTrx = appData.allTransaksi || [];
+  // Kelompokkan pengeluaran per bulan (format YYYY-MM)
+  var buckets = {};
+  allTrx.forEach(function(t){
+    if(t.tipe !== 'pengeluaran' || !t.tanggal) return;
+    var ym = t.tanggal.substring(0,7); // "2026-03"
+    buckets[ym] = (buckets[ym]||0) + (t.jumlah||0);
+  });
+  var keys = Object.keys(buckets).sort();
+  var cv = document.getElementById('trenChart');
+  var em = document.getElementById('tren-empty');
+  if(!keys.length){
+    if(cv) cv.style.display='none';
+    if(em) em.style.display='';
+    return;
+  }
+  if(cv) cv.style.display='';
+  if(em) em.style.display='none';
+  if(trenInst){ trenInst.destroy(); trenInst=null; }
+  var labels = keys.map(function(k){
+    var parts=k.split('-');
+    var names=['','Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'];
+    return names[parseInt(parts[1])]+'\n'+parts[0];
+  });
+  var values = keys.map(function(k){ return buckets[k]; });
+  trenInst = new Chart(cv, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Pengeluaran',
+        data: values,
+        borderColor: '#4f46e5',
+        backgroundColor: 'rgba(79,70,229,0.10)',
+        pointBackgroundColor: '#4f46e5',
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        fill: true,
+        tension: 0.35,
+        borderWidth: 2.5
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: function(c){ return ' '+fRp(c.raw); } } }
+      },
+      scales: {
+        y: {
+          ticks: { callback: function(v){ return 'Rp '+fmtNum(v); }, font:{size:9} },
+          grid: { color:'#f1f5f9' }
+        },
+        x: { ticks: { font:{size:9} }, grid:{display:false} }
+      }
+    }
+  });
+}
+
+function fmtNum(n){
+  if(n>=1000000000) return (n/1000000000).toFixed(1)+'M';
+  if(n>=1000000) return (n/1000000).toFixed(1)+'jt';
+  if(n>=1000) return (n/1000).toFixed(0)+'rb';
+  return String(n);
+}
+
+function exportTrenCSV(){
+  var allTrx = appData && appData.allTransaksi || [];
+  if(!allTrx.length){ toast('Belum ada data transaksi','error'); return; }
+  var buckets = {};
+  allTrx.forEach(function(t){
+    if(t.tipe !== 'pengeluaran' || !t.tanggal) return;
+    var ym = t.tanggal.substring(0,7);
+    buckets[ym] = (buckets[ym]||0) + (t.jumlah||0);
+  });
+  var keys = Object.keys(buckets).sort();
+  if(!keys.length){ toast('Belum ada data pengeluaran','error'); return; }
+  var rows = ['Bulan,Total Pengeluaran'];
+  keys.forEach(function(k){ rows.push(k+','+buckets[k]); });
+  // Tambah detail transaksi per baris
+  rows.push('');
+  rows.push('--- Detail Transaksi Pengeluaran ---');
+  rows.push('Tanggal,Keterangan,Kategori,Akun,Jumlah');
+  var exp = allTrx.filter(function(t){ return t.tipe==='pengeluaran'; });
+  exp.sort(function(a,b){ return (a.tanggal||'').localeCompare(b.tanggal||''); });
+  exp.forEach(function(t){
+    var ket = (t.keterangan||'').replace(/,/g,' ');
+    rows.push([t.tanggal||'',ket,t.kategori||'',t.akun||'',t.jumlah||0].join(','));
+  });
+  var csv = rows.join('\n');
+  var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'BudgetKu_Tren_'+(globalTglAwal||'').replace(/-/g,'')+'_'+(globalTglAkhir||'').replace(/-/g,'')+'.csv';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('CSV berhasil diunduh!','success');
+}
+
+// ================================================================
+// VISIBILITY TOGGLE
+// ================================================================
+var VIS_KEY = 'budgetku_visibility';
+var VIS_MAP = {
+  'toggle-pie':              'card [id*="page-home"] .card:has(#pieChart)',
+  'toggle-income':           'card [id*="page-home"] .card:has(#incomeChart)',
+  'toggle-tren':             '#card-tren-pengeluaran',
+  'toggle-dana-menganggur':  '#card-dana-menganggur',
+  'toggle-defisit':          '#card-defisit'
+};
+
+function loadVisibility(){
+  try{
+    var s = localStorage.getItem(VIS_KEY);
+    if(s){
+      var v = JSON.parse(s);
+      Object.keys(v).forEach(function(id){
+        var el = document.getElementById(id);
+        if(el) el.checked = v[id];
+      });
+    }
+  }catch(e){}
+  applyVisibility();
+}
+
+function applyVisibility(){
+  // Simpan ke localStorage
+  var state = {};
+  ['toggle-pie','toggle-income','toggle-tren','toggle-dana-menganggur','toggle-defisit'].forEach(function(id){
+    var cb = document.getElementById(id);
+    if(cb) state[id] = cb.checked;
+  });
+  try{ localStorage.setItem(VIS_KEY, JSON.stringify(state)); }catch(e){}
+
+  // Apply
+  // Pie chart card
+  var cbPie = document.getElementById('toggle-pie');
+  var pieCards = document.querySelectorAll('#page-home .card');
+  pieCards.forEach(function(c){ if(c.querySelector('#pieChart')) c.style.display = (!cbPie||cbPie.checked)?'':'none'; });
+
+  // Income chart card
+  var cbInc = document.getElementById('toggle-income');
+  pieCards.forEach(function(c){ if(c.querySelector('#incomeChart')) c.style.display = (!cbInc||cbInc.checked)?'':'none'; });
+
+  // Tren card
+  var cbTren = document.getElementById('toggle-tren');
+  var tCard = document.getElementById('card-tren-pengeluaran');
+  if(tCard) tCard.style.display = (!cbTren||cbTren.checked)?'':'none';
+
+  // Dana Menganggur mini-card
+  var cbDana = document.getElementById('toggle-dana-menganggur');
+  var dCard = document.getElementById('card-dana-menganggur');
+  if(dCard) dCard.style.display = (!cbDana||cbDana.checked)?'':'none';
+
+  // Defisit mini-card
+  var cbDef = document.getElementById('toggle-defisit');
+  var defCard = document.getElementById('card-defisit');
+  if(defCard) defCard.style.display = (!cbDef||cbDef.checked)?'':'none';
 }
 
 function renderPie(){
@@ -831,8 +1072,8 @@ function renderBudget(){
   var wr=document.getElementById('total-anggaran-wrap');
   // Hitung total saldo semua akun
   var totalSaldoAkun = (appData.akunWithSaldo||[]).reduce(function(s,a){return s+(a.saldo||0);},0);
-  // Dana Menganggur = total saldo akun - total anggaran, min 0
-  var danaMenganggur = Math.max(0, totalSaldoAkun - totAng);
+  // Dana Menganggur = total saldo akun - total limit anggaran - total pengeluaran, min 0
+  var danaMenganggur = Math.max(0, totalSaldoAkun - (appData.totalAnggaran||0) - (appData.totalPengeluaran||0));
   if(totAng>0){
     wr.style.display='';
     document.getElementById('total-anggaran-val').textContent=fRp(totAng);
@@ -1115,26 +1356,55 @@ function closePeriodPicker(){
   window._availablePeriodes = null;
 }
 
-async function selectPeriodToCopy(pidx){
+function selectPeriodToCopy(pidx){
   var periodes = window._availablePeriodes || [];
   var periode  = periodes[parseInt(pidx)];
   if(!periode) return;
-
   var budgets = periode.budgets || [];
   if(!budgets.length){ toast('Tidak ada budget di periode ini','error'); return; }
-
-  var label = (periode.tglAwal||'-') + ' s/d ' + (periode.tglAkhir||'-');
-  if(!confirm('Salin '+budgets.length+' anggaran dari periode\n'+label+'\nke periode aktif: '+globalTglAwal+' s/d '+globalTglAkhir+'?')) return;
-
+  window._salinPeriode = periode;
   closePeriodPicker();
+  // Tampilkan modal pilih kategori
+  var label = (periode.tglAwal||'-') + ' s/d ' + (periode.tglAkhir||'-');
+  document.getElementById('salin-kat-subtitle').textContent = 'dari periode: ' + label;
+  var listEl = document.getElementById('salin-kat-list');
+  listEl.innerHTML = budgets.map(function(b, i){
+    return '<label style="display:flex;align-items:center;gap:9px;padding:7px 4px;border-bottom:1px solid #f1f5f9;cursor:pointer;">'
+      + '<input type="checkbox" class="salin-kat-cb" data-bidx="'+i+'" checked style="width:17px;height:17px;accent-color:var(--primary);">'
+      + '<span style="flex:1;font-size:.8rem;font-weight:600;color:var(--text);">'+esc(b.kategori||'-')+'</span>'
+      + '<span style="font-size:.75rem;color:var(--primary);font-weight:700;">'+fRp(b.limit||0)+'</span>'
+      + '</label>';
+  }).join('');
+  var m = document.getElementById('modal-salin-kategori');
+  if(m){ m.style.display='flex'; }
+}
 
-  // Copy one by one
+function closeModalSalinKat(){
+  var m = document.getElementById('modal-salin-kategori');
+  if(m) m.style.display='none';
+}
+
+function toggleAllSalinKat(val){
+  document.querySelectorAll('.salin-kat-cb').forEach(function(cb){ cb.checked=val; });
+}
+
+async function doSalinSelectedKat(){
+  var periode = window._salinPeriode;
+  if(!periode) return;
+  var budgets = periode.budgets || [];
+  var selected = [];
+  document.querySelectorAll('.salin-kat-cb').forEach(function(cb){
+    if(cb.checked){
+      var b = budgets[parseInt(cb.dataset.bidx)];
+      if(b) selected.push(b);
+    }
+  });
+  if(!selected.length){ toast('Pilih minimal 1 kategori','error'); return; }
+  closeModalSalinKat();
+  toast('Menyalin '+selected.length+' anggaran...','info');
   var saved = 0;
-  var listEl = document.getElementById('period-picker-list');
-  toast('Menyalin '+budgets.length+' anggaran...','info');
-
-  for(var i = 0; i < budgets.length; i++){
-    var b = budgets[i];
+  for(var i = 0; i < selected.length; i++){
+    var b = selected[i];
     var r = await api('updateBudget',{
       kategori: b.kategori,
       limit:    b.limit,
