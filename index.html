@@ -437,14 +437,14 @@
       <div class="card">
         <div class="card-head"><i class="bi bi-pie-chart-fill"></i> Komposisi Pengeluaran</div>
         <div class="card-body">
-          <div class="chart-wrap"><canvas id="pieChart"></canvas></div>
+          <div class="chart-wrap"><div id="pieChart-wrap"><canvas id="pieChart"></canvas></div></div>
           <div id="pie-empty" class="empty-state" style="display:none;"><i class="bi bi-bar-chart"></i><p>Belum ada pengeluaran</p></div>
         </div>
       </div>
       <div class="card">
         <div class="card-head"><i class="bi bi-pie-chart"></i> Komposisi Pemasukan</div>
         <div class="card-body">
-          <div class="chart-wrap"><canvas id="incomeChart"></canvas></div>
+          <div class="chart-wrap"><div id="incomeChart-wrap"><canvas id="incomeChart"></canvas></div></div>
           <div id="income-chart-empty" class="empty-state" style="display:none;"><i class="bi bi-bar-chart"></i><p>Belum ada pemasukan</p></div>
         </div>
       </div>
@@ -1011,39 +1011,34 @@ function applyVisibility(){
   if(defCard) defCard.style.display = (!cbDef||cbDef.checked)?'':'none';
 }
 
+function freshCanvas(wrapperId, canvasId){
+  if(wrapperId){
+    var w=document.getElementById(wrapperId);
+    if(w){w.innerHTML='<canvas id="'+canvasId+'"></canvas>';}
+  }
+  return document.getElementById(canvasId);
+}
+
 function renderPie(){
   var lb=appData.chartLabels||[],vl=appData.chartValues||[];
   if(pieInst){try{pieInst.destroy();}catch(e){}pieInst=null;}
-  // Replace canvas agar Chart.js tidak stuck
-  var oldCv=document.getElementById('pieChart');
+  var cv=freshCanvas('pieChart-wrap','pieChart');
   var em=document.getElementById('pie-empty');
-  var wrap=oldCv.parentNode;
-  oldCv.parentNode.removeChild(oldCv);
-  var newCv=document.createElement('canvas');
-  newCv.id='pieChart';
-  wrap.insertBefore(newCv,em);
-  if(!lb.length){newCv.style.display='none';em.style.display='block';return;}
-  newCv.style.display='block';em.style.display='none';
+  if(!lb.length){if(cv)cv.style.display='none';if(em)em.style.display='block';return;}
+  if(cv)cv.style.display='';if(em)em.style.display='none';
   var bgColors=lb.map(function(_,i){return COLORS[i%COLORS.length];});
-  pieInst=new Chart(newCv,{type:'doughnut',data:{labels:lb,datasets:[{data:vl,backgroundColor:bgColors,borderWidth:3,borderColor:'#fff',hoverOffset:10}]},options:{responsive:true,maintainAspectRatio:true,cutout:'58%',plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:10,boxWidth:11,generateLabels:function(chart){var ds=chart.data.datasets[0];return chart.data.labels.map(function(lbl,i){return{text:lbl,fillStyle:ds.backgroundColor[i],strokeStyle:'#fff',lineWidth:2,index:i};});}}},tooltip:{callbacks:{label:function(c){return ' '+c.label+': '+fRp(c.raw);}}}}}});
+  pieInst=new Chart(cv,{type:'doughnut',data:{labels:lb,datasets:[{data:vl,backgroundColor:bgColors,borderWidth:3,borderColor:'#fff',hoverOffset:10}]},options:{responsive:true,maintainAspectRatio:true,cutout:'58%',plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:10,boxWidth:11,generateLabels:function(chart){var ds=chart.data.datasets[0];return chart.data.labels.map(function(lbl,i){return{text:lbl,fillStyle:ds.backgroundColor[i],strokeStyle:'#fff',lineWidth:2,index:i};});}}},tooltip:{callbacks:{label:function(c){return ' '+c.label+': '+fRp(c.raw);}}}}}});
 }
 
 function renderIncomeChart(){
   var lb=appData.incomeChartLabels||[],vl=appData.incomeChartValues||[];
-  // Destroy instance lama
   if(incomeInst){try{incomeInst.destroy();}catch(e){}incomeInst=null;}
-  // Replace canvas dengan elemen baru agar Chart.js tidak stuck
-  var wrap=document.getElementById('incomeChart').parentNode;
+  var cv=freshCanvas('incomeChart-wrap','incomeChart');
   var em=document.getElementById('income-chart-empty');
-  var oldCv=document.getElementById('incomeChart');
-  oldCv.parentNode.removeChild(oldCv);
-  var newCv=document.createElement('canvas');
-  newCv.id='incomeChart';
-  wrap.insertBefore(newCv,em);
-  if(!lb.length){newCv.style.display='none';em.style.display='block';return;}
-  newCv.style.display='block';em.style.display='none';
+  if(!lb.length){if(cv)cv.style.display='none';if(em)em.style.display='block';return;}
+  if(cv)cv.style.display='';if(em)em.style.display='none';
   var bgColors=lb.map(function(_,i){return INCOME_COLORS[i%INCOME_COLORS.length];});
-  incomeInst=new Chart(newCv,{type:'doughnut',data:{labels:lb,datasets:[{data:vl,backgroundColor:bgColors,borderWidth:3,borderColor:'#fff',hoverOffset:10}]},options:{responsive:true,maintainAspectRatio:true,cutout:'58%',plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:10,boxWidth:11,generateLabels:function(chart){var ds=chart.data.datasets[0];return chart.data.labels.map(function(lbl,i){return{text:lbl,fillStyle:ds.backgroundColor[i],strokeStyle:'#fff',lineWidth:2,index:i};});}}},tooltip:{callbacks:{label:function(c){return ' '+c.label+': '+fRp(c.raw);}}}}}});
+  incomeInst=new Chart(cv,{type:'doughnut',data:{labels:lb,datasets:[{data:vl,backgroundColor:bgColors,borderWidth:3,borderColor:'#fff',hoverOffset:10}]},options:{responsive:true,maintainAspectRatio:true,cutout:'58%',plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:10,boxWidth:11,generateLabels:function(chart){var ds=chart.data.datasets[0];return chart.data.labels.map(function(lbl,i){return{text:lbl,fillStyle:ds.backgroundColor[i],strokeStyle:'#fff',lineWidth:2,index:i};});}}},tooltip:{callbacks:{label:function(c){return ' '+c.label+': '+fRp(c.raw);}}}}}});
 }
 
 function renderRiwayat(){
